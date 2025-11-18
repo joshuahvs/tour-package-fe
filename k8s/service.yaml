@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: tour-package-service
+spec:
+  selector:
+    app: tour-package
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 80

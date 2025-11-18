@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tour-package-fe
+  labels:
+    app: tour-package-fe
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tour-package-fe
+  template:
+    metadata:
+      labels:
+        app: tour-package-fe
+    spec:
+      containers:
+        - name: tour-package-fe
+          image: joshuahansvito/tour-package-fe:REPLACE_ME_TAG
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
