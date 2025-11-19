@@ -4,18 +4,46 @@
       <RouterLink to="/" class="brand">
         <span class="brand-text">Tour Package Management</span>
       </RouterLink>
-      <nav class="links">
+      <nav class="links" v-if="isAuthenticated">
         <RouterLink to="/" class="link">Home</RouterLink>
         <RouterLink to="/activities" class="link">Activities</RouterLink>
         <RouterLink to="/packages" class="link">Packages</RouterLink>
         <RouterLink to="/reports" class="link">Reports</RouterLink>
       </nav>
+
+      <div class="auth-buttons">
+        <template v-if="isAuthenticated">
+          <div class="user-chip">
+            <span class="user-name">{{ userName }}</span>
+            <span class="user-role">{{ currentUser?.role }}</span>
+          </div>
+          <button class="logout-btn" @click="handleLogout">Logout</button>
+        </template>
+        <template v-else>
+          <RouterLink to="/login" class="link">Login</RouterLink>
+          <RouterLink to="/register" class="btn-primary">Register</RouterLink>
+        </template>
+      </div>
     </div>
   </header>
 </template>
 
 <script setup lang="ts">
-// No script needed; using <RouterLink> directly in the template.
+import { computed } from 'vue'
+import { useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
+
+const authStore = useAuthStore()
+const router = useRouter()
+
+const isAuthenticated = computed(() => authStore.isAuthenticated)
+const currentUser = computed(() => authStore.currentUser)
+const userName = computed(() => currentUser.value?.fullName || currentUser.value?.username || 'User')
+
+const handleLogout = () => {
+  authStore.logout()
+  router.push({ name: 'login' })
+}
 </script>
 
 <style scoped>
@@ -66,5 +94,54 @@
 .router-link-active {
   background: rgba(255, 255, 255, 0.25);
   color: white !important;
+}
+.auth-buttons {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.user-chip {
+  display: flex;
+  flex-direction: column;
+  padding: 0.35rem 0.75rem;
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  color: white;
+  font-size: 0.85rem;
+}
+.user-name {
+  font-weight: 600;
+}
+.user-role {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.8;
+}
+.logout-btn {
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  color: #4f46e5;
+  background: white;
+  padding: 0.45rem 0.85rem;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.logout-btn:hover {
+  background: #f4f4ff;
+}
+.btn-primary {
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-weight: 600;
+  text-decoration: none;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  transition: all 0.2s ease;
+}
+.btn-primary:hover {
+  background: rgba(255, 255, 255, 0.3);
 }
 </style>

@@ -1,23 +1,15 @@
-import type { ApiResponse, PackageData, PackageDetailData, CreatePackageRequest, UpdatePackageRequest } from '@/interfaces/package.interface'
-
-const API_BASE_URL = 'http://localhost:8080/api'
+import type { PackageData, PackageDetailData, CreatePackageRequest, UpdatePackageRequest } from '@/interfaces/package.interface'
+import { httpRequest } from './httpClient'
 
 export const packageApi = {
   async getAllPackages(searchName?: string): Promise<PackageData[]> {
     try {
-      const url = new URL(`${API_BASE_URL}/package`)
+      const params = new URLSearchParams()
       if (searchName) {
-        url.searchParams.append('name', searchName)
+        params.append('name', searchName)
       }
-      
-      const response = await fetch(url.toString())
-      const json: ApiResponse<PackageData[]> = await response.json()
-      
-      if (!response.ok) {
-        throw new Error(json.message || 'Failed to fetch packages')
-      }
-      
-      return json.data || []
+      const response = await httpRequest<PackageData[]>(`/package${params.toString() ? `?${params}` : ''}`)
+      return response.data || []
     } catch (error) {
       console.error('Error fetching packages:', error)
       throw error
@@ -26,14 +18,8 @@ export const packageApi = {
 
   async getPackageById(id: string): Promise<PackageData> {
     try {
-      const response = await fetch(`${API_BASE_URL}/package/${id}`)
-      const json: ApiResponse<PackageData> = await response.json()
-      
-      if (!response.ok) {
-        throw new Error(json.message || 'Failed to fetch package')
-      }
-      
-      return json.data
+      const response = await httpRequest<PackageData>(`/package/${id}`)
+      return response.data
     } catch (error) {
       console.error('Error fetching package:', error)
       throw error
@@ -42,20 +28,11 @@ export const packageApi = {
 
   async createPackage(packageData: CreatePackageRequest): Promise<PackageData> {
     try {
-      const response = await fetch(`${API_BASE_URL}/package`, {
+      const response = await httpRequest<PackageData>('/package', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify(packageData),
       })
-      const json: ApiResponse<PackageData> = await response.json()
-      
-      if (!response.ok) {
-        throw new Error(json.message || 'Failed to create package')
-      }
-      
-      return json.data
+      return response.data
     } catch (error) {
       console.error('Error creating package:', error)
       throw error
@@ -64,20 +41,11 @@ export const packageApi = {
 
   async updatePackage(id: string, packageData: UpdatePackageRequest): Promise<PackageData> {
     try {
-      const response = await fetch(`${API_BASE_URL}/package/${id}`, {
+      const response = await httpRequest<PackageData>(`/package/${id}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify(packageData),
       })
-      const json: ApiResponse<PackageData> = await response.json()
-      
-      if (!response.ok) {
-        throw new Error(json.message || 'Failed to update package')
-      }
-      
-      return json.data
+      return response.data
     } catch (error) {
       console.error('Error updating package:', error)
       throw error
@@ -86,14 +54,9 @@ export const packageApi = {
 
   async deletePackage(id: string): Promise<void> {
     try {
-      const response = await fetch(`${API_BASE_URL}/package/${id}`, {
+      await httpRequest<null>(`/package/${id}`, {
         method: 'DELETE',
       })
-      const json: ApiResponse<null> = await response.json()
-      
-      if (!response.ok) {
-        throw new Error(json.message || 'Failed to delete package')
-      }
     } catch (error) {
       console.error('Error deleting package:', error)
       throw error
@@ -102,14 +65,8 @@ export const packageApi = {
 
   async getPackageDetail(id: string): Promise<PackageDetailData> {
     try {
-      const response = await fetch(`${API_BASE_URL}/package/${id}/detail`)
-      const json: ApiResponse<PackageDetailData> = await response.json()
-      
-      if (!response.ok) {
-        throw new Error(json.message || 'Failed to fetch package detail')
-      }
-      
-      return json.data
+      const response = await httpRequest<PackageDetailData>(`/package/${id}/detail`)
+      return response.data
     } catch (error) {
       console.error('Error fetching package detail:', error)
       throw error
@@ -118,16 +75,10 @@ export const packageApi = {
 
   async processPackage(id: string): Promise<PackageData> {
     try {
-      const response = await fetch(`${API_BASE_URL}/package/${id}/process`, {
+      const response = await httpRequest<PackageData>(`/package/${id}/process`, {
         method: 'PUT',
       })
-      const json: ApiResponse<PackageData> = await response.json()
-      
-      if (!response.ok) {
-        throw new Error(json.message || 'Failed to process package')
-      }
-      
-      return json.data
+      return response.data
     } catch (error) {
       console.error('Error processing package:', error)
       throw error

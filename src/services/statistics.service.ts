@@ -1,6 +1,4 @@
-import type { ApiResponse } from '@/interfaces/plan.interface'
-
-const API_BASE_URL = 'http://localhost:8080/api'
+import { httpRequest } from './httpClient'
 
 export interface ActivityTypeRevenue {
   activityType: string
@@ -18,15 +16,9 @@ export const statisticsApi = {
       if (year) params.append('year', year.toString())
       if (month) params.append('month', month.toString())
       
-      const url = `${API_BASE_URL}/statistics${params.toString() ? '?' + params.toString() : ''}`
-      const response = await fetch(url)
-      const json: ApiResponse<RevenueStatistics> = await response.json()
-      
-      if (!response.ok) {
-        throw new Error(json.message || 'Failed to fetch statistics')
-      }
-      
-      return json.data
+      const query = params.toString()
+      const response = await httpRequest<RevenueStatistics>(`/statistics${query ? `?${query}` : ''}`)
+      return response.data
     } catch (error) {
       console.error('Error fetching statistics:', error)
       throw error
