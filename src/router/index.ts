@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import HomeView from '../views/HomeView.vue'
 import ActivitiesView from '@/views/ActivitiesView.vue'
+import ActivityDetailView from '@/views/ActivityDetailView.vue'
 import PackagesView from '@/views/PackagesView.vue'
 import CreatePackageView from '@/views/CreatePackageView.vue'
 import EditPackageView from '@/views/EditPackageView.vue'
@@ -9,6 +10,11 @@ import CreatePlanView from '@/views/CreatePlanView.vue'
 import PlanDetailView from '@/views/PlanDetailView.vue'
 import EditPlanView from '@/views/EditPlanView.vue'
 import ReportsView from '@/views/ReportsView.vue'
+import UsersView from '@/views/UsersView.vue'
+import UserDetailView from '@/views/UserDetailView.vue'
+import CustomersView from '@/views/CustomersView.vue'
+import ProfileView from '@/views/ProfileView.vue'
+import EditProfileView from '@/views/EditProfileView.vue'
 import AboutView from '../views/AboutView.vue'
 import LoginView from '../views/LoginView.vue'
 import RegisterView from '../views/RegisterView.vue'
@@ -26,6 +32,12 @@ const router = createRouter({
       path: '/activities',
       name: 'activities',
       component: ActivitiesView,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/activities/:id',
+      name: 'activity-detail',
+      component: ActivityDetailView,
       meta: { requiresAuth: true },
     },
     {
@@ -74,6 +86,48 @@ const router = createRouter({
       path: '/reports',
       name: 'reports',
       component: ReportsView,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/users',
+      name: 'users',
+      component: UsersView,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/users/:id',
+      name: 'user-detail',
+      component: UserDetailView,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/customers',
+      name: 'customers',
+      component: CustomersView,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/profile',
+      name: 'profile',
+      component: ProfileView,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/profile/edit',
+      name: 'edit-profile',
+      component: EditProfileView,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/profile/:identifier',
+      name: 'profile-detail',
+      component: ProfileView,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/profile/:identifier/edit',
+      name: 'edit-profile-detail',
+      component: EditProfileView,
       meta: { requiresAuth: true },
     },
     {

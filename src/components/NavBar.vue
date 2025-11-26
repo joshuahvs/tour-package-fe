@@ -9,14 +9,16 @@
         <RouterLink to="/activities" class="link">Activities</RouterLink>
         <RouterLink to="/packages" class="link">Packages</RouterLink>
         <RouterLink to="/reports" class="link">Reports</RouterLink>
+        <RouterLink v-if="isSuperAdmin" to="/users" class="link">Users</RouterLink>
+        <RouterLink v-if="canAccessCustomers" to="/customers" class="link">Customers</RouterLink>
       </nav>
 
       <div class="auth-buttons">
         <template v-if="isAuthenticated">
-          <div class="user-chip">
+          <RouterLink to="/profile" class="user-chip">
             <span class="user-name">{{ userName }}</span>
             <span class="user-role">{{ currentUser?.role }}</span>
-          </div>
+          </RouterLink>
           <button class="logout-btn" @click="handleLogout">Logout</button>
         </template>
         <template v-else>
@@ -39,6 +41,11 @@ const router = useRouter()
 const isAuthenticated = computed(() => authStore.isAuthenticated)
 const currentUser = computed(() => authStore.currentUser)
 const userName = computed(() => currentUser.value?.fullName || currentUser.value?.username || 'User')
+const isSuperAdmin = computed(() => currentUser.value?.role === 'SUPERADMIN')
+const canAccessCustomers = computed(() => {
+  const allowedRoles = ['SUPERADMIN', 'FLIGHT_AIRLINE', 'ACCOMMODATION_OWNER', 'RENTAL_VENDOR', 'INSURANCE_PROVIDER', 'TOUR_PACKAGE_VENDOR']
+  return currentUser.value?.role && allowedRoles.includes(currentUser.value.role)
+})
 
 const handleLogout = () => {
   authStore.logout()
@@ -108,6 +115,12 @@ const handleLogout = () => {
   border-radius: 8px;
   color: white;
   font-size: 0.85rem;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+.user-chip:hover {
+  background: rgba(255, 255, 255, 0.28);
 }
 .user-name {
   font-weight: 600;

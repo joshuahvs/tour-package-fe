@@ -9,6 +9,8 @@ export interface ActivityData {
   endDate: string
   startLocation: string
   endLocation: string
+  isDeleted: boolean
+  creatorId: string
 }
 
 export interface ApiResponse<T> {
