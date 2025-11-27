@@ -50,4 +50,49 @@ export const activityApi = {
       throw error
     }
   },
+
+  async createActivity(data: {
+    activityName: string
+    activityType: string
+    activityItem: string
+    price: number
+    capacity: number
+    startDate: string
+    endDate: string
+    startLocation: string
+    endLocation: string
+  }): Promise<ActivityData> {
+    try {
+      const response = await httpRequest<ActivityData>('/activities', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      })
+      return response.data
+    } catch (error) {
+      console.error('Error creating activity:', error)
+      throw error
+    }
+  },
+
+  async updateActivity(id: string, data: {
+    activityName: string
+    activityItem: string
+    price: number
+    capacity: number
+    startDate: string
+    endDate: string
+    startLocation: string
+    endLocation: string
+  }): Promise<ActivityData> {
+    try {
+      const response = await httpRequest<ActivityData>(`/activities/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      })
+      return response.data
+    } catch (error) {
+      console.error('Error updating activity:', error)
+      throw error
+    }
+  },
 }

@@ -3,9 +3,11 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { packageApi } from '@/services/package.service'
 import type { PackageDetailData } from '@/interfaces/package.interface'
+import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
 const router = useRouter()
+const authStore = useAuthStore()
 
 const packageDetail = ref<PackageDetailData | null>(null)
 const loading = ref(true)
@@ -15,9 +17,20 @@ const isDeleting = ref(false)
 const showProcessModal = ref(false)
 const isProcessing = ref(false)
 
+const currentUser = authStore.currentUser
+const isCustomer = computed(() => currentUser?.role === 'CUSTOMER')
+const isSuperAdminOrVendor = computed(() => 
+  currentUser?.role === 'SUPERADMIN' || currentUser?.role === 'TOUR_PACKAGE_VENDOR'
+)
+
+const isOwnPackage = computed(() => 
+  packageDetail.value && currentUser && packageDetail.value.userId === currentUser.id
+)
+
 const packageInfo = computed(() => {
   if (!packageDetail.value) return {}
   return {
+    'Package ID': packageDetail.value.id,
     'Package Name': packageDetail.value.packageName,
     'User ID': packageDetail.value.userId,
     'Start Date': formatDate(packageDetail.value.startDate),
@@ -32,16 +45,61 @@ const tableHeaders = [
   'Start Location', 'End Location', 'Status', 'Activities', 'Actions'
 ]
 
-const canEdit = computed(() =>
-  packageDetail.value?.status === 'PENDING' &&
-  packageDetail.value?.plans.length === 0
-)
+// Authorization for Edit button
+const canEdit = computed(() => {
+  if (!packageDetail.value) return false
+  
+  // Package must be PENDING and have no plans
+  if (packageDetail.value.status !== 'PENDING' || packageDetail.value.plans.length > 0) {
+    return false
+  }
+  
+  // Customer: only their own packages
+  if (isCustomer.value) {
+    return isOwnPackage.value
+  }
+  
+  // Superadmin and Vendor: all packages
+  return isSuperAdminOrVendor.value
+})
 
-const canProcess = computed(() =>
-  packageDetail.value?.status?.toUpperCase() === 'PENDING' &&
-  packageDetail.value?.plans.length > 0 &&
-  packageDetail.value.plans.every(plan => plan.status?.toUpperCase() === 'FULFILLED')
-)
+// Authorization for Delete button
+const canDelete = computed(() => {
+  if (!packageDetail.value) return false
+  
+  // Package must be PENDING
+  if (packageDetail.value.status !== 'PENDING') {
+    return false
+  }
+  
+  // Customer: only their own packages
+  if (isCustomer.value) {
+    return isOwnPackage.value
+  }
+  
+  // Superadmin and Vendor: all PENDING packages
+  return isSuperAdminOrVendor.value
+})
+
+// Authorization for Process button
+const canProcess = computed(() => {
+  if (!packageDetail.value) return false
+  
+  // Customer CANNOT process packages
+  if (isCustomer.value) {
+    return false
+  }
+  
+  // Only Superadmin and Vendor can process
+  if (!isSuperAdminOrVendor.value) {
+    return false
+  }
+  
+  // Package must be PENDING, have plans, and all plans must be FULFILLED
+  return packageDetail.value.status?.toUpperCase() === 'PENDING' &&
+    packageDetail.value.plans.length > 0 &&
+    packageDetail.value.plans.every(plan => plan.status?.toUpperCase() === 'FULFILLED')
+})
 
 const fetchPackageDetail = async () => {
   try {
@@ -72,14 +130,27 @@ const getStatusClass = (status: string) => {
 }
 
 const handleEdit = () => {
-  if (!canEdit.value) return alert('Can only edit PENDING packages without plans')
+  if (!canEdit.value) {
+    if (packageDetail.value?.plans.length > 0) {
+      return alert('Cannot edit package: Package already has plans')
+    }
+    if (packageDetail.value?.status !== 'PENDING') {
+      return alert('Cannot edit package: Only PENDING packages can be edited')
+    }
+    return alert('You do not have permission to edit this package')
+  }
   router.push(`/packages/${route.params.id}/edit`)
 }
 
-const handleViewPlan = (id: string) => router.push(`/plans/${id}`)
-const handleCreatePlan = () => router.push(`/packages/${route.params.id}/plans/create`)
-
 const handleDelete = async () => {
+  if (!canDelete.value) {
+    if (packageDetail.value?.status !== 'PENDING') {
+      return alert('Cannot delete package: Only PENDING packages can be deleted')
+    }
+    return alert('You do not have permission to delete this package')
+  }
+  
+  showDeleteModal.value = false
   isDeleting.value = true
   try {
     await packageApi.deletePackage(route.params.id as string)
@@ -89,11 +160,14 @@ const handleDelete = async () => {
     alert('Failed to delete package')
   } finally {
     isDeleting.value = false
-    showDeleteModal.value = false
   }
 }
 
+const handleViewPlan = (id: string) => router.push(`/plans/${id}`)
+const handleCreatePlan = () => router.push(`/packages/${route.params.id}/plans/create`)
+
 const handleProcess = async () => {
+  showProcessModal.value = false
   isProcessing.value = true
   try {
     await packageApi.processPackage(route.params.id as string)
@@ -103,13 +177,27 @@ const handleProcess = async () => {
     alert('Failed to process package')
   } finally {
     isProcessing.value = false
-    showProcessModal.value = false
   }
 }
 
 const handleProcessClick = () => {
   if (!canProcess.value) {
-    return alert('Cannot process package. Must be PENDING and all plans fulfilled.')
+    if (isCustomer.value) {
+      return alert('Customers cannot process packages')
+    }
+    if (packageDetail.value?.status !== 'PENDING') {
+      return alert('Cannot process package: Only PENDING packages can be processed')
+    }
+    if (packageDetail.value?.plans.length === 0) {
+      return alert('Cannot process package: Package must have at least one plan')
+    }
+    const hasUnfulfilledPlans = packageDetail.value?.plans.some(
+      plan => plan.status?.toUpperCase() !== 'FULFILLED'
+    )
+    if (hasUnfulfilledPlans) {
+      return alert('Cannot process package: All plans must be FULFILLED')
+    }
+    return alert('You do not have permission to process this package')
   }
   showProcessModal.value = true
 }
@@ -135,6 +223,7 @@ onMounted(fetchPackageDetail)
       <!-- Action Buttons -->
       <div class="flex flex-wrap gap-3 mb-2">
         <button
+          v-if="canEdit || isSuperAdminOrVendor || isOwnPackage"
           class="px-4 py-2 rounded-md font-medium text-white transition 
                  disabled:opacity-60 disabled:cursor-not-allowed 
                  bg-indigo-500 hover:bg-indigo-600"
@@ -146,18 +235,25 @@ onMounted(fetchPackageDetail)
         </button>
 
         <button
-          class="px-4 py-2 rounded-md font-medium text-white bg-red-500 hover:bg-red-600 transition"
+          v-if="canDelete || isSuperAdminOrVendor || isOwnPackage"
+          class="px-4 py-2 rounded-md font-medium text-white transition
+                 disabled:opacity-60 disabled:cursor-not-allowed
+                 bg-red-500 hover:bg-red-600"
           @click="showDeleteModal = true"
+          :disabled="!canDelete"
+          :title="!canDelete ? 'Can only delete PENDING packages' : 'Delete this package'"
         >
           Delete Package
         </button>
 
         <button
+          v-if="!isCustomer"
           class="px-4 py-2 rounded-md font-medium text-white transition
                  bg-emerald-500 hover:bg-emerald-600
-                 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                 disabled:opacity-60 disabled:cursor-not-allowed"
           @click="handleProcessClick"
           :disabled="!canProcess"
+          :title="!canProcess ? 'Must be PENDING with all plans FULFILLED' : 'Process this package'"
         >
           Process Package
         </button>

@@ -4,6 +4,8 @@ import { useRouter } from 'vue-router'
 import { activityApi } from '@/services/activity.service'
 import type { ActivityData } from '@/interfaces/activity.interface'
 import { useAuthStore } from '@/stores/auth'
+import LocationSelector from '@/components/LocationSelector.vue'
+import ConfirmDeleteModal from '@/components/ConfirmDeleteModal.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -11,6 +13,10 @@ const authStore = useAuthStore()
 const activities = ref<ActivityData[]>([])
 const loading = ref(true)
 const error = ref<string | null>(null)
+
+const showDeleteModal = ref(false)
+const activityToDelete = ref<ActivityData | null>(null)
+const isDeleting = ref(false)
 
 const filterForm = reactive({
   search: '',
@@ -33,6 +39,11 @@ const canViewDeleted = computed(() => {
 const isVendor = () => {
   const vendorRoles = ['TOUR_PACKAGE_VENDOR', 'FLIGHT_AIRLINE', 'ACCOMMODATION_OWNER', 'RENTAL_VENDOR']
   return currentUser && vendorRoles.includes(currentUser.role)
+}
+
+const canCreateActivity = () => {
+  const allowedRoles = ['SUPERADMIN', 'TOUR_PACKAGE_VENDOR', 'FLIGHT_AIRLINE', 'ACCOMMODATION_OWNER', 'RENTAL_VENDOR']
+  return currentUser && allowedRoles.includes(currentUser.role)
 }
 
 const canEditActivity = (activity: ActivityData) => {
@@ -144,19 +155,43 @@ const editActivity = (activityId: string) => {
   router.push(`/activities/${activityId}/edit`)
 }
 
-const deleteActivity = async (activity: ActivityData) => {
-  if (!confirm(`Are you sure you want to delete activity "${activity.activityName}"? This action cannot be undone.`)) {
-    return
-  }
+const createNewActivity = () => {
+  router.push('/activities/create')
+}
 
+const deleteActivity = async (activity: ActivityData) => {
+  activityToDelete.value = activity
+  showDeleteModal.value = true
+}
+
+const confirmDelete = async () => {
+  if (!activityToDelete.value) return
+
+  isDeleting.value = true
   try {
-    await activityApi.deleteActivity(activity.id)
+    await activityApi.deleteActivity(activityToDelete.value.id)
     alert('Activity successfully deleted.')
+    showDeleteModal.value = false
+    activityToDelete.value = null
     fetchActivities()
   } catch (err: any) {
-    alert(err.message || 'Failed to delete activity')
+    // Check for specific error messages
+    let errorMsg = err.message || 'Failed to delete activity'
+    
+    if (errorMsg.includes('unfulfilled orders') || errorMsg.includes('unfulfilled')) {
+      errorMsg = 'Cannot delete activity: This activity has unfulfilled orders.'
+    }
+    
+    alert(errorMsg)
     console.error(err)
+  } finally {
+    isDeleting.value = false
   }
+}
+
+const cancelDelete = () => {
+  showDeleteModal.value = false
+  activityToDelete.value = null
 }
 
 onMounted(() => {
@@ -171,6 +206,17 @@ onMounted(() => {
         <h1>Activities</h1>
         <p class="subtitle">Browse all available activities and refine the list using the filters below</p>
       </div>
+      <button 
+        v-if="canCreateActivity()"
+        @click="createNewActivity" 
+        class="btn-create"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="12" y1="5" x2="12" y2="19"></line>
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+        Create New Activity
+      </button>
     </div>
 
     <div class="filter-card">
@@ -206,24 +252,16 @@ onMounted(() => {
           </div>
 
           <div class="form-group">
-            <label for="start-location">Start Location</label>
-            <input
-              id="start-location"
+            <LocationSelector
               v-model="filterForm.startLocation"
-              type="text"
-              placeholder="Filter by start location"
-              class="form-input"
+              label="Start Location"
             />
           </div>
 
           <div class="form-group">
-            <label for="end-location">End Location</label>
-            <input
-              id="end-location"
+            <LocationSelector
               v-model="filterForm.endLocation"
-              type="text"
-              placeholder="Filter by end location"
-              class="form-input"
+              label="End Location"
             />
           </div>
         </div>
@@ -267,7 +305,7 @@ onMounted(() => {
             {{ loading ? 'Filtering...' : 'Apply Filters' }}
           </button>
           <button type="button" class="btn-secondary" :disabled="loading" @click="resetFilters">
-            Reset
+            Clear Filters
           </button>
         </div>
       </form>
@@ -369,6 +407,17 @@ onMounted(() => {
         </table>
       </div>
     </div>
+
+    <!-- Delete Confirmation Modal -->
+    <ConfirmDeleteModal
+      :show="showDeleteModal"
+      :activity-name="activityToDelete?.activityName || ''"
+      :activity-type="activityToDelete?.activityType"
+      :activity-item="activityToDelete?.activityItem"
+      :is-deleting="isDeleting"
+      @confirm="confirmDelete"
+      @cancel="cancelDelete"
+    />
   </section>
 </template>
 
@@ -381,6 +430,10 @@ onMounted(() => {
 
 .activities-header {
   margin-bottom: 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 2rem;
 }
 
 .activities-header h1 {
@@ -393,6 +446,32 @@ onMounted(() => {
 .subtitle {
   color: #666;
   font-size: 1rem;
+}
+
+.btn-create {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+
+.btn-create:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.btn-create:active {
+  transform: translateY(0);
 }
 
 .filter-card {

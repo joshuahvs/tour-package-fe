@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { activityApi } from '@/services/activity.service'
 import type { ActivityData } from '@/interfaces/activity.interface'
 import { useAuthStore } from '@/stores/auth'
+import ConfirmDeleteModal from '@/components/ConfirmDeleteModal.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -13,6 +14,7 @@ const activity = ref<ActivityData | null>(null)
 const loading = ref(true)
 const error = ref<string | null>(null)
 const deleting = ref(false)
+const showDeleteModal = ref(false)
 
 const currentUser = authStore.currentUser
 const isSuperAdmin = currentUser?.role === 'SUPERADMIN'
@@ -71,11 +73,11 @@ const handleEdit = () => {
   router.push(`/activities/${route.params.id}/edit`)
 }
 
-const handleDelete = async () => {
-  if (!confirm('Are you sure you want to delete this activity? This action cannot be undone.')) {
-    return
-  }
+const handleDelete = () => {
+  showDeleteModal.value = true
+}
 
+const confirmDelete = async () => {
   deleting.value = true
   try {
     const id = route.params.id as string
@@ -83,11 +85,23 @@ const handleDelete = async () => {
     alert('Activity successfully deleted.')
     router.push('/activities')
   } catch (err: any) {
-    alert(err.message || 'Failed to delete activity')
+    // Check for specific error messages
+    let errorMsg = err.message || 'Failed to delete activity'
+    
+    if (errorMsg.includes('unfulfilled orders') || errorMsg.includes('unfulfilled')) {
+      errorMsg = 'Cannot delete activity: This activity has unfulfilled orders.'
+    }
+    
+    alert(errorMsg)
     console.error(err)
+    showDeleteModal.value = false
   } finally {
     deleting.value = false
   }
+}
+
+const cancelDelete = () => {
+  showDeleteModal.value = false
 }
 
 const handleBack = () => {
@@ -226,6 +240,17 @@ onMounted(() => {
         </div>
       </div>
     </div>
+
+    <!-- Delete Confirmation Modal -->
+    <ConfirmDeleteModal
+      :show="showDeleteModal"
+      :activity-name="activity?.activityName || ''"
+      :activity-type="activity?.activityType"
+      :activity-item="activity?.activityItem"
+      :is-deleting="deleting"
+      @confirm="confirmDelete"
+      @cancel="cancelDelete"
+    />
   </div>
 </template>
 

@@ -105,6 +105,7 @@ const initDataTable = () => {
     paging: true,
     searching: false,
     ordering: true,
+    order: [[1, 'asc']], // Sort by Period (startDate) ascending by default
     info: true,
     lengthChange: false
   })

@@ -57,8 +57,16 @@ const validateForm = (): boolean => {
     return false
   }
 
+  const now = new Date()
+  now.setSeconds(0, 0) // Reset seconds and milliseconds for fair comparison
   const startDate = new Date(formData.startDate)
   const endDate = new Date(formData.endDate)
+
+  if (startDate < now) {
+    errorMessage.value = 'Start date must be in the future or current time'
+    return false
+  }
+
   if (endDate <= startDate) {
     errorMessage.value = 'End date must be after start date'
     return false

@@ -1,11 +1,16 @@
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { packageApi } from '@/services/package.service'
 import type { CreatePackageRequest } from '@/interfaces/package.interface'
+import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
+const authStore = useAuthStore()
+const currentUser = authStore.currentUser
+
+const isCustomer = computed(() => currentUser?.role === 'CUSTOMER')
 
 const formData = reactive<CreatePackageRequest>({
   packageName: '',
@@ -18,6 +23,13 @@ const formData = reactive<CreatePackageRequest>({
 const isSubmitting = ref(false)
 const errorMessage = ref('')
 
+// Auto-fill userId for customers
+onMounted(() => {
+  if (isCustomer.value && currentUser?.id) {
+    formData.userId = currentUser.id
+  }
+})
+
 const validateForm = (): boolean => {
   errorMessage.value = ''
 
@@ -26,8 +38,15 @@ const validateForm = (): boolean => {
     return false
   }
 
+  const now = new Date()
+  now.setSeconds(0, 0) // Reset seconds and milliseconds for fair comparison
   const startDate = new Date(formData.startDate)
   const endDate = new Date(formData.endDate)
+
+  if (startDate < now) {
+    errorMessage.value = 'Start date must be in the future or current time'
+    return false
+  }
 
   if (endDate <= startDate) {
     errorMessage.value = 'End date must be after start date'
@@ -103,8 +122,15 @@ const handleCancel = () => {
             type="text"
             placeholder="user001"
             required
-            class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+            :readonly="isCustomer"
+            :disabled="isCustomer"
+            :class="[
+              'w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none',
+              isCustomer ? 'bg-gray-100 cursor-not-allowed text-gray-600' : ''
+            ]"
+            :title="isCustomer ? 'Auto-filled with your user ID' : 'Enter user ID'"
           />
+          <p v-if="isCustomer" class="text-xs text-gray-500 mt-1">Auto-filled with your user ID</p>
         </div>
 
         <!-- Start Date -->

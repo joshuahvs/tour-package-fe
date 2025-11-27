@@ -2,6 +2,8 @@ import { createRouter, createWebHistory } from 'vue-router'
 import HomeView from '../views/HomeView.vue'
 import ActivitiesView from '@/views/ActivitiesView.vue'
 import ActivityDetailView from '@/views/ActivityDetailView.vue'
+import CreateActivityView from '@/views/CreateActivityView.vue'
+import EditActivityView from '@/views/EditActivityView.vue'
 import PackagesView from '@/views/PackagesView.vue'
 import CreatePackageView from '@/views/CreatePackageView.vue'
 import EditPackageView from '@/views/EditPackageView.vue'
@@ -35,9 +37,21 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/activities/create',
+      name: 'create-activity',
+      component: CreateActivityView,
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/activities/:id',
       name: 'activity-detail',
       component: ActivityDetailView,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/activities/:id/edit',
+      name: 'edit-activity',
+      component: EditActivityView,
       meta: { requiresAuth: true },
     },
     {
