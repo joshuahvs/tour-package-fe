@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { packageApi } from '@/services/package.service'
+import { planApi } from '@/services/plan.service'
 import type { PackageDetailData } from '@/interfaces/package.interface'
 import { useAuthStore } from '@/stores/auth'
 
@@ -16,6 +17,7 @@ const showDeleteModal = ref(false)
 const isDeleting = ref(false)
 const showProcessModal = ref(false)
 const isProcessing = ref(false)
+const locationMap = ref<Record<string, string>>({})
 
 const currentUser = authStore.currentUser
 const isCustomer = computed(() => currentUser?.role === 'CUSTOMER')
@@ -122,6 +124,24 @@ const formatDateTime = (d: string) =>
 const formatCurrency = (a: number) =>
   new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(a)
 
+const fetchLocations = async () => {
+  try {
+    const locations = await planApi.getLocations()
+    locationMap.value = locations.reduce((acc, loc) => {
+      acc[loc.code] = loc.name
+      return acc
+    }, {} as Record<string, string>)
+  } catch (err) {
+    console.error('Failed to load locations', err)
+  }
+}
+
+const formatLocation = (name?: string, code?: string) => {
+  if (name) return name
+  if (!code) return '-'
+  return locationMap.value[code] || code
+}
+
 const getStatusClass = (status: string) => {
   const s = status.toLowerCase()
   if (['processed', 'fulfilled'].includes(s)) return 'bg-emerald-100 text-emerald-800'
@@ -203,7 +223,10 @@ const handleProcessClick = () => {
   showProcessModal.value = true
 }
 
-onMounted(fetchPackageDetail)
+onMounted(() => {
+  fetchPackageDetail()
+  fetchLocations()
+})
 </script>
 
 
@@ -319,8 +342,12 @@ onMounted(fetchPackageDetail)
                 <td class="px-4 py-3 text-gray-800 text-sm">{{ formatCurrency(plan.price) }}</td>
                 <td class="px-4 py-3 text-gray-800 text-sm">{{ formatDateTime(plan.startDate) }}</td>
                 <td class="px-4 py-3 text-gray-800 text-sm">{{ formatDateTime(plan.endDate) }}</td>
-                <td class="px-4 py-3 text-gray-800 text-sm">{{ plan.startLocation }}</td>
-                <td class="px-4 py-3 text-gray-800 text-sm">{{ plan.endLocation }}</td>
+                <td class="px-4 py-3 text-gray-800 text-sm">
+                  {{ formatLocation(plan.startLocationName, plan.startLocation) }}
+                </td>
+                <td class="px-4 py-3 text-gray-800 text-sm">
+                  {{ formatLocation(plan.endLocationName, plan.endLocation) }}
+                </td>
                 <td class="px-4 py-3">
                   <span
                     :class="[
