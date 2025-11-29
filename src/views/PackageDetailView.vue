@@ -131,7 +131,7 @@ const getStatusClass = (status: string) => {
 
 const handleEdit = () => {
   if (!canEdit.value) {
-    if (packageDetail.value?.plans.length > 0) {
+    if ((packageDetail.value?.plans?.length ?? 0) > 0) {
       return alert('Cannot edit package: Package already has plans')
     }
     if (packageDetail.value?.status !== 'PENDING') {
@@ -156,8 +156,9 @@ const handleDelete = async () => {
     await packageApi.deletePackage(route.params.id as string)
     alert('Package deleted successfully!')
     router.push('/packages')
-  } catch {
-    alert('Failed to delete package')
+  } catch (err: any) {
+    const errorMessage = err.message || 'Failed to delete package. Please try again.'
+    alert(`Error: ${errorMessage}`)
   } finally {
     isDeleting.value = false
   }
@@ -188,10 +189,10 @@ const handleProcessClick = () => {
     if (packageDetail.value?.status !== 'PENDING') {
       return alert('Cannot process package: Only PENDING packages can be processed')
     }
-    if (packageDetail.value?.plans.length === 0) {
+    if ((packageDetail.value?.plans?.length ?? 0) === 0) {
       return alert('Cannot process package: Package must have at least one plan')
     }
-    const hasUnfulfilledPlans = packageDetail.value?.plans.some(
+    const hasUnfulfilledPlans = packageDetail.value?.plans?.some(
       plan => plan.status?.toUpperCase() !== 'FULFILLED'
     )
     if (hasUnfulfilledPlans) {
@@ -355,20 +356,45 @@ onMounted(fetchPackageDetail)
       @click="showDeleteModal = false"
     >
       <div class="bg-gray-800 rounded-xl p-6 max-w-md w-full text-gray-100" @click.stop>
-        <h3 class="text-xl font-semibold mb-4">Delete Package</h3>
+        <h3 class="text-xl font-semibold mb-4 text-red-400">Confirm Package Deletion</h3>
+        
+        <!-- Package Information -->
+        <div class="bg-gray-700 rounded-lg p-4 mb-4 text-sm">
+          <div class="mb-2">
+            <span class="text-gray-400">Package Name:</span>
+            <span class="ml-2 font-medium">{{ packageDetail?.packageName }}</span>
+          </div>
+          <div class="mb-2">
+            <span class="text-gray-400">Period:</span>
+            <span class="ml-2">{{ packageDetail ? formatDate(packageDetail.startDate) : '' }} - {{ packageDetail ? formatDate(packageDetail.endDate) : '' }}</span>
+          </div>
+          <div>
+            <span class="text-gray-400">Plans:</span>
+            <span class="ml-2">{{ packageDetail?.plans.length || 0 }} plan(s)</span>
+          </div>
+        </div>
+        
+        <!-- Warning Message -->
+        <div class="bg-red-900/30 border border-red-500/50 rounded-lg p-3 mb-6">
+          <p class="text-red-300 text-sm">
+            ⚠️ <strong>Warning:</strong> This action cannot be undone. Deleting this package will also permanently delete all associated <strong>Plans</strong> and <strong>Ordered Activities</strong>.
+          </p>
+        </div>
+        
         <p class="mb-6 text-gray-300">
-          Are you sure you want to delete this package? This action cannot be undone and will also delete all associated plans.
+          Are you sure you want to delete this package?
         </p>
+        
         <div class="flex gap-3 justify-center">
           <button
-            class="bg-cyan-500 hover:bg-cyan-600 text-white px-4 py-2 rounded-md min-w-[80px]"
+            class="bg-red-600 hover:bg-red-700 text-white px-5 py-2 rounded-md min-w-[100px] font-medium transition-colors"
             @click="handleDelete"
             :disabled="isDeleting"
           >
-            {{ isDeleting ? 'Deleting...' : 'OK' }}
+            {{ isDeleting ? 'Deleting...' : 'Yes, Delete' }}
           </button>
           <button
-            class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md min-w-[80px]"
+            class="bg-gray-600 hover:bg-gray-700 text-white px-5 py-2 rounded-md min-w-[100px] font-medium transition-colors"
             @click="showDeleteModal = false"
             :disabled="isDeleting"
           >
