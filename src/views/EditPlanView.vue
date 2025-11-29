@@ -3,6 +3,7 @@ import { ref, onMounted, nextTick } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { planApi } from '@/services/plan.service';
 import type { PlanDetailData, LocationData, UpdatePlanRequest } from '@/interfaces/plan.interface';
+import LocationSelector from '@/components/LocationSelector.vue';
 
 const router = useRouter();
 const route = useRoute();
@@ -65,16 +66,19 @@ const loadPlanData = async () => {
     loading.value = true;
     error.value = '';
 
-    // Load locations first to ensure they're available for the select dropdowns
-    locations.value = await planApi.getLocations();
-    console.log('Loaded locations:', locations.value);
-    
-    // Then load plan data
+    // Load plan data first to check status
     const planData = await planApi.getPlanDetail(planId);
     planDetail.value = planData;
-    console.log('Loaded plan data:', planData);
-    console.log('Plan startLocation:', planData.startLocation);
-    console.log('Plan endLocation:', planData.endLocation);
+
+    // Check if plan can be edited (package must be PENDING and plan must be unfulfilled)
+    if (planData.status.toLowerCase() !== 'unfulfilled') {
+      error.value = 'Cannot edit plan. Plan status must be Unfulfilled.';
+      loading.value = false;
+      return;
+    }
+
+    // Load locations first to ensure they're available for the select dropdowns
+    locations.value = await planApi.getLocations();
     
     // Wait for next tick to ensure DOM is updated with locations
     await nextTick();
@@ -83,16 +87,19 @@ const loadPlanData = async () => {
     formData.value.planName = planData.planName;
     formData.value.startDate = formatDateForInput(planData.startDate);
     formData.value.endDate = formatDateForInput(planData.endDate);
-    formData.value.startLocation = planData.startLocation;
-    formData.value.endLocation = planData.endLocation;
+    const resolveLocationValue = (value: string) => {
+      if (!value) return '';
+      const match = locations.value.find(loc =>
+        loc.code === value ||
+        loc.name === value ||
+        `${loc.name} (${loc.code})` === value
+      );
+      return match ? match.code : value;
+    };
+
+    formData.value.startLocation = resolveLocationValue(planData.startLocation);
+    formData.value.endLocation = resolveLocationValue(planData.endLocation);
     
-    console.log('Form data after setting:', formData.value);
-    
-    // Additional check: verify if the location values match any option
-    const startLocationMatch = locations.value.find(loc => loc.name === planData.startLocation);
-    const endLocationMatch = locations.value.find(loc => loc.name === planData.endLocation);
-    console.log('Start location match:', startLocationMatch);
-    console.log('End location match:', endLocationMatch);
   } catch (err: any) {
     error.value = err.message || 'Failed to load plan data';
   } finally {
@@ -214,48 +221,18 @@ onMounted(() => {
       </div>
 
       <!-- Start Location -->
-      <div>
-        <label for="startLocation" class="block text-sm font-semibold text-gray-700 mb-2">
-          Start Location <span class="text-red-500">*</span>
-        </label>
-        <select
-          id="startLocation"
-          v-model="formData.startLocation"
-          required
-          class="w-full border border-gray-300 rounded-md p-2.5 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="" disabled>Select start location</option>
-          <option
-            v-for="location in locations"
-            :key="location.code"
-            :value="location.name"
-          >
-            {{ location.name }}
-          </option>
-        </select>
-      </div>
+      <LocationSelector
+        v-model="formData.startLocation"
+        label="Start Location"
+        :required="true"
+      />
 
       <!-- End Location -->
-      <div>
-        <label for="endLocation" class="block text-sm font-semibold text-gray-700 mb-2">
-          End Location <span class="text-red-500">*</span>
-        </label>
-        <select
-          id="endLocation"
-          v-model="formData.endLocation"
-          required
-          class="w-full border border-gray-300 rounded-md p-2.5 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="" disabled>Select end location</option>
-          <option
-            v-for="location in locations"
-            :key="location.code"
-            :value="location.name"
-          >
-            {{ location.name }}
-          </option>
-        </select>
-      </div>
+      <LocationSelector
+        v-model="formData.endLocation"
+        label="End Location"
+        :required="true"
+      />
 
       <!-- Actions -->
       <div class="flex justify-end gap-3 pt-4">

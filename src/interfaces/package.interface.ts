@@ -19,6 +19,8 @@ export interface PlanData {
   endDate: string
   startLocation: string
   endLocation: string
+  startLocationName?: string
+  endLocationName?: string
   activitiesCount: number
 }
 

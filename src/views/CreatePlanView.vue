@@ -3,7 +3,8 @@ import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { planApi } from '@/services/plan.service'
 import { packageApi } from '@/services/package.service'
-import type { CreatePlanRequest, LocationData } from '@/interfaces/plan.interface'
+import type { CreatePlanRequest } from '@/interfaces/plan.interface'
+import LocationSelector from '@/components/LocationSelector.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -11,7 +12,6 @@ const router = useRouter()
 const loading = ref(true)
 const error = ref('')
 const isSubmitting = ref(false)
-const locations = ref<LocationData[]>([])
 
 const formData = ref<CreatePlanRequest>({
   planName: '',
@@ -21,15 +21,6 @@ const formData = ref<CreatePlanRequest>({
   startLocation: '',
   endLocation: '',
 })
-
-const fetchLocations = async () => {
-  try {
-    locations.value = await planApi.getLocations()
-  } catch (err) {
-    console.error('Failed to fetch locations:', err)
-    error.value = 'Failed to load locations'
-  }
-}
 
 const validatePackageStatus = async () => {
   try {
@@ -50,6 +41,15 @@ const validatePackageStatus = async () => {
 }
 
 const handleSubmit = async () => {
+  // Client-side validation: startDate < endDate
+  const startDate = new Date(formData.value.startDate)
+  const endDate = new Date(formData.value.endDate)
+  
+  if (endDate <= startDate) {
+    alert('End date must be after start date')
+    return
+  }
+
   isSubmitting.value = true
   try {
     const packageId = route.params.id as string
@@ -77,7 +77,6 @@ onMounted(async () => {
     loading.value = false
     return
   }
-  await fetchLocations()
   loading.value = false
 })
 </script>
@@ -164,47 +163,16 @@ onMounted(async () => {
 
         <!-- Locations -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <label for="startLocation" class="block text-gray-700 font-medium mb-2">
-              Start Location
-            </label>
-            <select
-              id="startLocation"
-              v-model="formData.startLocation"
-              required
-              class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-400"
-            >
-              <option value="">Select start location</option>
-              <option
-                v-for="location in locations"
-                :key="location.code"
-                :value="location.name"
-              >
-                {{ location.name }}
-              </option>
-            </select>
-          </div>
-
-          <div>
-            <label for="endLocation" class="block text-gray-700 font-medium mb-2">
-              End Location
-            </label>
-            <select
-              id="endLocation"
-              v-model="formData.endLocation"
-              required
-              class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-400"
-            >
-              <option value="">Select end location</option>
-              <option
-                v-for="location in locations"
-                :key="location.code"
-                :value="location.name"
-              >
-                {{ location.name }}
-              </option>
-            </select>
-          </div>
+          <LocationSelector
+            v-model="formData.startLocation"
+            label="Start Location"
+            :required="true"
+          />
+          <LocationSelector
+            v-model="formData.endLocation"
+            label="End Location"
+            :required="true"
+          />
         </div>
 
         <!-- Buttons -->

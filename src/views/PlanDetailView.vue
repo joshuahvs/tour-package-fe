@@ -31,12 +31,17 @@ const deleteActivityError = ref('')
 const showDeletePlanModal = ref(false)
 const deletingPlan = ref(false)
 const deletePlanError = ref('')
+const locationMap = ref<Record<string, string>>({})
 
 const isPackagePending = computed(() => {
   // Check if package status is Pending by checking if we can edit
   // We'll enable edit only when package is Pending
   return planDetail.value !== null
 })
+
+const calculateAvailableQuota = (activity: OrderedQuantityData) => {
+  return activity.quota - activity.orderedQuota
+}
 
 const fetchPlanDetail = async () => {
   try {
@@ -53,6 +58,34 @@ const fetchPlanDetail = async () => {
 const formatDateTime = (dateString: string) => {
   const date = new Date(dateString)
   return date.toLocaleString('id-ID', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'long', year: 'numeric' })
+}
+
+const loadLocations = async () => {
+  try {
+    const locations = await planApi.getLocations()
+    const map: Record<string, string> = {}
+    locations.forEach((loc) => {
+      map[loc.code] = loc.name
+    })
+    locationMap.value = map
+  } catch (err) {
+    console.error('Failed to load locations for display:', err)
+  }
+}
+
+const formatLocationLabel = (value: string | undefined | null) => {
+  if (!value) return '-'
+  const trimmed = value.trim()
+  if (!trimmed) return '-'
+  const directName = locationMap.value[trimmed]
+  if (directName) {
+    return `${directName} (${trimmed})`
+  }
+  const match = Object.entries(locationMap.value).find(([, name]) => name.toLowerCase() === trimmed.toLowerCase())
+  if (match) {
+    return `${match[1]} (${match[0]})`
+  }
+  return trimmed
 }
 
 const formatCurrency = (amount: number) =>
@@ -88,11 +121,16 @@ const onActivitySelect = () => {
 }
 
 const handleAddActivity = async () => {
-  if (!selectedActivityId.value || !orderedQuantity.value || !planDetail.value) return
+  if (!selectedActivityId.value || !planDetail.value) return
+  
+  // If orderedQuantity is 0 or not set, default to 1
+  const quantity = orderedQuantity.value || 0
+  
   try {
     addingActivity.value = true
-    const req: AddOrderedQuantityRequest = { activityId: selectedActivityId.value, orderedQuantity: orderedQuantity.value }
+    const req: AddOrderedQuantityRequest = { activityId: selectedActivityId.value, orderedQuantity: quantity }
     planDetail.value = await planApi.addOrderedQuantity(planDetail.value.id, req)
+    alert('OrderedActivity created successfully')
     closeAddActivityModal()
   } catch (err: any) {
     addActivityError.value = err.message || 'Failed to add activity'
@@ -157,6 +195,12 @@ const handleDeleteActivity = async () => {
 }
 
 const openDeletePlanModal = () => {
+  // Check if plan can be deleted (plan status must be unfulfilled)
+  if (planDetail.value && planDetail.value.status.toLowerCase() !== 'unfulfilled') {
+    alert('Cannot delete plan. Plan status must be Unfulfilled.')
+    return
+  }
+  
   deletePlanError.value = ''
   showDeletePlanModal.value = true
 }
@@ -182,6 +226,7 @@ const handleDeletePlan = async () => {
 }
 
 onMounted(fetchPlanDetail)
+onMounted(loadLocations)
 </script>
 
 <template>
@@ -222,8 +267,8 @@ onMounted(fetchPlanDetail)
           <div><span class="font-medium text-gray-500">Total Price:</span> {{ formatCurrency(planDetail.totalPrice) }}</div>
           <div><span class="font-medium text-gray-500">Start Date:</span> {{ formatDateTime(planDetail.startDate) }}</div>
           <div><span class="font-medium text-gray-500">End Date:</span> {{ formatDateTime(planDetail.endDate) }}</div>
-          <div><span class="font-medium text-gray-500">Start Location:</span> {{ planDetail.startLocation }}</div>
-          <div><span class="font-medium text-gray-500">End Location:</span> {{ planDetail.endLocation }}</div>
+          <div><span class="font-medium text-gray-500">Start Location:</span> {{ formatLocationLabel(planDetail.startLocation) }}</div>
+          <div><span class="font-medium text-gray-500">End Location:</span> {{ formatLocationLabel(planDetail.endLocation) }}</div>
           <div>
             <span class="font-medium text-gray-500">Package:</span>
             <router-link :to="`/packages/${planDetail.packageId}`" class="text-indigo-600 hover:underline">
@@ -262,18 +307,21 @@ onMounted(fetchPlanDetail)
         </div>
 
         <div v-if="planDetail.orderedQuantities.length === 0" class="text-center text-gray-500 py-10">
-          No activities ordered yet.
+          No activities found
         </div>
 
         <div v-else class="overflow-x-auto">
           <table class="w-full text-sm text-left border border-gray-200">
             <thead class="bg-gray-100 text-gray-700">
               <tr>
+                <th class="px-4 py-2">ID</th>
+                <th class="px-4 py-2">Plan ID</th>
                 <th class="px-4 py-2">Activity Name</th>
+                <th class="px-4 py-2">Activity ID</th>
+                <th class="px-4 py-2 text-center">Quota</th>
                 <th class="px-4 py-2">Price</th>
-                <th class="px-4 py-2 text-center">Capacity</th>
-                <th class="px-4 py-2 text-center">Ordered Quantity</th>
-                <th class="px-4 py-2">Total Price</th>
+                <th class="px-4 py-2 text-center">Ordered Quota</th>
+                <th class="px-4 py-2 text-center">Available Quota</th>
                 <th class="px-4 py-2">Start Date</th>
                 <th class="px-4 py-2">End Date</th>
                 <th class="px-4 py-2 text-center">Actions</th>
@@ -281,11 +329,21 @@ onMounted(fetchPlanDetail)
             </thead>
             <tbody>
               <tr v-for="activity in planDetail.orderedQuantities" :key="activity.id" class="border-t hover:bg-gray-50">
+                <td class="px-4 py-2 font-mono text-xs">{{ activity.id }}</td>
+                <td class="px-4 py-2 font-mono text-xs">{{ planDetail.id }}</td>
                 <td class="px-4 py-2">{{ activity.activityName }}</td>
-                <td class="px-4 py-2">{{ formatCurrency(activity.price) }}</td>
+                <td class="px-4 py-2 font-mono text-xs">{{ activity.activityId || '-' }}</td>
                 <td class="px-4 py-2 text-center">{{ activity.quota }}</td>
+                <td class="px-4 py-2">{{ formatCurrency(activity.price) }}</td>
                 <td class="px-4 py-2 text-center">{{ activity.orderedQuota }}</td>
-                <td class="px-4 py-2">{{ formatCurrency(activity.total) }}</td>
+                <td class="px-4 py-2 text-center">
+                  <span :class="[
+                    'px-2 py-1 rounded-full text-sm font-medium',
+                    calculateAvailableQuota(activity) > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                  ]">
+                    {{ calculateAvailableQuota(activity) }}
+                  </span>
+                </td>
                 <td class="px-4 py-2">{{ formatDateTime(activity.startDate) }}</td>
                 <td class="px-4 py-2">{{ formatDateTime(activity.endDate) }}</td>
                 <td class="px-4 py-2 text-center">
@@ -378,12 +436,12 @@ onMounted(fetchPlanDetail)
 
               <!-- Ordered Quantity Input -->
               <div class="bg-gray-50 p-3 rounded-md">
-                <label class="block text-sm font-medium text-gray-700 mb-2">Ordered Quantity <span class="text-red-500">*</span></label>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Ordered Quantity</label>
                 <input
                   v-model.number="orderedQuantity"
                   type="number"
-                  min="1"
-                  placeholder="Enter quantity"
+                  min="0"
+                  placeholder="Enter quantity (optional, default: 0)"
                   class="w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 p-2.5"
                 />
                 <p class="text-xs text-gray-500 mt-1">
@@ -409,7 +467,7 @@ onMounted(fetchPlanDetail)
           </button>
           <button
             @click="handleAddActivity"
-            :disabled="!selectedActivityId || !orderedQuantity || addingActivity"
+            :disabled="!selectedActivityId || addingActivity"
             class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50"
           >
             {{ addingActivity ? 'Adding...' : 'Add Activity' }}
@@ -576,7 +634,7 @@ onMounted(fetchPlanDetail)
     >
       <div class="bg-white rounded-lg w-full max-w-md shadow-lg" @click.stop>
         <div class="flex justify-between items-center border-b p-4">
-          <h3 class="font-semibold text-gray-800">Confirm Delete Plan</h3>
+          <h3 class="font-semibold text-gray-800">Confirm Plan Deletion</h3>
           <button @click="closeDeletePlanModal" class="text-2xl text-gray-500 hover:text-gray-700">×</button>
         </div>
 
@@ -584,6 +642,11 @@ onMounted(fetchPlanDetail)
           <p class="text-gray-700">
             Are you sure you want to delete this plan? This action cannot be undone.
           </p>
+          <div class="bg-yellow-50 border border-yellow-200 rounded-md p-3">
+            <p class="text-sm text-yellow-800">
+              ⚠️ <strong>Warning:</strong> All ordered activities associated with this plan will also be deleted.
+            </p>
+          </div>
 
           <div class="bg-gray-50 p-3 rounded-md">
             <label class="block text-sm font-medium text-gray-600 mb-1">Plan Name</label>

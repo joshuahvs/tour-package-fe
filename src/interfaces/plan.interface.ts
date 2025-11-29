@@ -8,6 +8,8 @@ export interface PlanData {
   endDate: string
   startLocation: string
   endLocation: string
+  startLocationName?: string
+  endLocationName?: string
   activitiesCount: number
   capacity: number
 }
@@ -34,6 +36,8 @@ export interface PlanDetailData {
   endDate: string
   startLocation: string
   endLocation: string
+  startLocationName?: string
+  endLocationName?: string
   packageId: string
   packageName: string
   orderedQuantities: OrderedQuantityData[]
