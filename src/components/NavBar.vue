@@ -8,7 +8,7 @@
         <RouterLink to="/" class="link">Home</RouterLink>
         <RouterLink to="/activities" class="link">Activities</RouterLink>
         <RouterLink to="/packages" class="link">Packages</RouterLink>
-        <RouterLink to="/reports" class="link">Reports</RouterLink>
+        <RouterLink to="/statistics" class="link">Statistics</RouterLink>
         <RouterLink v-if="isSuperAdmin" to="/users" class="link">Users</RouterLink>
         <RouterLink v-if="canAccessCustomers" to="/customers" class="link">Customers</RouterLink>
       </nav>

@@ -97,8 +97,8 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
-      path: '/reports',
-      name: 'reports',
+      path: '/statistics',
+      name: 'statistics',
       component: ReportsView,
       meta: { requiresAuth: true },
     },
