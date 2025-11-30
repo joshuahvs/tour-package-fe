@@ -21,7 +21,7 @@ const locationMap = ref<Record<string, string>>({})
 
 const currentUser = authStore.currentUser
 const isCustomer = computed(() => currentUser?.role === 'CUSTOMER')
-const isSuperAdminOrVendor = computed(() => 
+const isSuperAdminOrVendor = computed(() =>
   currentUser?.role === 'SUPERADMIN' || currentUser?.role === 'TOUR_PACKAGE_VENDOR'
 )
 
@@ -83,24 +83,35 @@ const canDelete = computed(() => {
   return isSuperAdminOrVendor.value
 })
 
-// Authorization for Process button
 const canProcess = computed(() => {
   if (!packageDetail.value) return false
-  
-  // Customer CANNOT process packages
-  if (isCustomer.value) {
+
+  // Customers can only process their own packages
+  if (isCustomer.value && !isOwnPackage.value) {
     return false
   }
-  
-  // Only Superadmin and Vendor can process
-  if (!isSuperAdminOrVendor.value) {
+
+  // Other roles must still be explicitly allowed
+  if (!isCustomer.value && !isSuperAdminOrVendor.value) {
     return false
   }
-  
+
   // Package must be PENDING, have plans, and all plans must be FULFILLED
-  return packageDetail.value.status?.toUpperCase() === 'PENDING' &&
-    packageDetail.value.plans.length > 0 &&
-    packageDetail.value.plans.every(plan => plan.status?.toUpperCase() === 'FULFILLED')
+  const isPending = packageDetail.value.status?.toUpperCase() === 'PENDING'
+  const hasPlans = packageDetail.value.plans.length > 0
+  const allPlansFulfilled = packageDetail.value.plans.every(
+    plan => plan.status?.toUpperCase() === 'FULFILLED'
+  )
+
+  return isPending && hasPlans && allPlansFulfilled
+})
+
+const shouldShowProcessButton = computed(() => {
+  if (!packageDetail.value) return false
+  if (isCustomer.value) {
+    return isOwnPackage.value
+  }
+  return isSuperAdminOrVendor.value
 })
 
 const fetchPackageDetail = async () => {
@@ -144,7 +155,9 @@ const formatLocation = (name?: string, code?: string) => {
 
 const getStatusClass = (status: string) => {
   const s = status.toLowerCase()
-  if (['processed', 'fulfilled'].includes(s)) return 'bg-emerald-100 text-emerald-800'
+  const waitingStatuses = ['processed', 'waiting for payment']
+  const completedStatuses = ['fulfilled', 'payment confirmed']
+  if (waitingStatuses.includes(s) || completedStatuses.includes(s)) return 'bg-emerald-100 text-emerald-800'
   if (['pending', 'unfulfilled'].includes(s)) return 'bg-amber-100 text-amber-800'
   return 'bg-gray-200 text-gray-700'
 }
@@ -194,18 +207,20 @@ const handleProcess = async () => {
     await packageApi.processPackage(route.params.id as string)
     alert('Package processed successfully!')
     await fetchPackageDetail()
-  } catch {
-    alert('Failed to process package')
+  } catch (err: any) {
+    const message = err?.message || 'Failed to process package'
+    alert(message)
   } finally {
     isProcessing.value = false
   }
 }
 
 const handleProcessClick = () => {
+  if (!shouldShowProcessButton.value) {
+    return alert('You do not have permission to process this package')
+  }
+
   if (!canProcess.value) {
-    if (isCustomer.value) {
-      return alert('Customers cannot process packages')
-    }
     if (packageDetail.value?.status !== 'PENDING') {
       return alert('Cannot process package: Only PENDING packages can be processed')
     }
@@ -220,6 +235,7 @@ const handleProcessClick = () => {
     }
     return alert('You do not have permission to process this package')
   }
+
   showProcessModal.value = true
 }
 
@@ -271,7 +287,7 @@ onMounted(() => {
         </button>
 
         <button
-          v-if="!isCustomer"
+          v-if="shouldShowProcessButton"
           class="px-4 py-2 rounded-md font-medium text-white transition
                  bg-emerald-500 hover:bg-emerald-600
                  disabled:opacity-60 disabled:cursor-not-allowed"
@@ -440,7 +456,7 @@ onMounted(() => {
       <div class="bg-gray-800 rounded-xl p-6 max-w-md w-full text-gray-100" @click.stop>
         <h3 class="text-xl font-semibold mb-4">Process Package</h3>
         <p class="mb-4 text-gray-300">
-          Are you sure you want to process this package? This will change the package status to 'PROCESSED' and book all activities. This action cannot be undone.
+          Are you sure you want to process this package? This will change the package status to 'Waiting for Payment' and book all activities. This action cannot be undone.
         </p>
         <div class="bg-amber-100 border border-amber-300 text-amber-800 px-3 py-2 rounded-md text-sm mb-6">
           ⚠️ All associated activities will have their capacity reduced.

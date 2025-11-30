@@ -156,12 +156,15 @@ const mapPackagesToRows = () => {
 
 const statusBadge = (status: string) => {
   const st = status.toLowerCase()
-  const cls =
-    st === 'processed'
-      ? 'bg-green-100 text-green-700'
-      : st === 'pending'
-      ? 'bg-orange-100 text-orange-800'
-      : 'bg-gray-100 text-gray-700'
+  const waitingStatuses = ['processed', 'waiting for payment']
+  const confirmedStatuses = ['payment confirmed']
+  const cls = waitingStatuses.includes(st)
+    ? 'bg-green-100 text-green-700'
+    : confirmedStatuses.includes(st)
+    ? 'bg-emerald-200 text-emerald-800'
+    : st === 'pending'
+    ? 'bg-orange-100 text-orange-800'
+    : 'bg-gray-100 text-gray-700'
   return `<span class="inline-block px-3 py-1 rounded-full text-sm font-semibold capitalize ${cls}">${status}</span>`
 }
 
