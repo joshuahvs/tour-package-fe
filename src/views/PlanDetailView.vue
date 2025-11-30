@@ -2,11 +2,14 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { planApi } from '@/services/plan.service'
+import { packageApi } from '@/services/package.service'
+import { useAuthStore } from '@/stores/auth'
 import type { PlanDetailData, PlanData, AddOrderedQuantityRequest, UpdateOrderedQuantityRequest, OrderedQuantityData } from '@/interfaces/plan.interface'
 
 const route = useRoute()
 const router = useRouter()
 
+const authStore = useAuthStore()
 const planDetail = ref<PlanDetailData | null>(null)
 const loading = ref(true)
 const error = ref('')
@@ -32,22 +35,67 @@ const showDeletePlanModal = ref(false)
 const deletingPlan = ref(false)
 const deletePlanError = ref('')
 const locationMap = ref<Record<string, string>>({})
+const packageOwnerId = ref<string | null>(null)
 
-const isPackagePending = computed(() => {
-  // Check if package status is Pending by checking if we can edit
-  // We'll enable edit only when package is Pending
-  return planDetail.value !== null
+const currentUser = computed(() => authStore.currentUser)
+const isCustomer = computed(() => currentUser.value?.role === 'CUSTOMER')
+const isSuperAdminOrVendor = computed(() =>
+  currentUser.value?.role === 'SUPERADMIN' || currentUser.value?.role === 'TOUR_PACKAGE_VENDOR'
+)
+
+const canManageOrderedActivities = computed(() => {
+  if (!currentUser.value) return false
+  if (isSuperAdminOrVendor.value) return true
+  if (isCustomer.value) {
+    return packageOwnerId.value !== null && packageOwnerId.value === currentUser.value.id
+  }
+  return false
 })
+
+const isPlanPending = computed(() => planDetail.value?.status?.toUpperCase() === 'UNFULFILLED')
+const canModifyOrderedActivities = computed(() => canManageOrderedActivities.value && isPlanPending.value)
 
 const calculateAvailableQuota = (activity: OrderedQuantityData) => {
   return activity.quota - activity.orderedQuota
 }
+
+const ensureCanModifyOrderedActivities = () => {
+  if (!canManageOrderedActivities.value) {
+    alert('You do not have permission to modify ordered activities for this plan')
+    return false
+  }
+  if (!isPlanPending.value) {
+    alert('Cannot modify ordered activities: Plan must be Unfulfilled')
+    return false
+  }
+  return true
+}
+
+const fetchPackageOwner = async (packageId: string) => {
+  try {
+    const pkg = await packageApi.getPackageDetail(packageId)
+    packageOwnerId.value = pkg.userId
+  } catch (err) {
+    console.error('Failed to load package ownership info', err)
+  }
+}
+
+const isEditQuantityValid = computed(() => {
+  if (!editingOrderedActivity.value) return false
+  if (editOrderedQuantity.value === null || editOrderedQuantity.value === undefined) return false
+  if (Number.isNaN(editOrderedQuantity.value)) return false
+  if (editOrderedQuantity.value < 0) return false
+  return editOrderedQuantity.value <= editingOrderedActivity.value.quota
+})
 
 const fetchPlanDetail = async () => {
   try {
     loading.value = true
     const planId = route.params.id as string
     planDetail.value = await planApi.getPlanDetail(planId)
+    if (planDetail.value?.packageId) {
+      await fetchPackageOwner(planDetail.value.packageId)
+    }
   } catch {
     error.value = 'Failed to load plan details'
   } finally {
@@ -96,6 +144,7 @@ const handleViewPackage = () => planDetail.value && router.push(`/packages/${pla
 const handleEditPlan = () => planDetail.value && router.push(`/plans/${planDetail.value.id}/edit`)
 
 const openAddActivityModal = async () => {
+  if (!ensureCanModifyOrderedActivities()) return
   showAddActivityModal.value = true
   loadingActivities.value = true
   try {
@@ -140,6 +189,7 @@ const handleAddActivity = async () => {
 }
 
 const openEditActivityModal = (activity: OrderedQuantityData) => {
+  if (!ensureCanModifyOrderedActivities()) return
   editingOrderedActivity.value = activity
   editOrderedQuantity.value = activity.orderedQuota
   editActivityError.value = ''
@@ -154,12 +204,27 @@ const closeEditActivityModal = () => {
 }
 
 const handleEditActivity = async () => {
-  if (!editingOrderedActivity.value || !editOrderedQuantity.value || !planDetail.value) return
+  if (!editingOrderedActivity.value) return
+  if (!ensureCanModifyOrderedActivities()) return
+  const quantity = Number(editOrderedQuantity.value)
+  if (Number.isNaN(quantity)) {
+    editActivityError.value = 'Ordered quantity is required'
+    return
+  }
+  if (quantity < 0) {
+    editActivityError.value = 'Ordered quantity cannot be negative'
+    return
+  }
+  if (quantity > editingOrderedActivity.value.quota) {
+    editActivityError.value = `Ordered quantity cannot exceed quota (${editingOrderedActivity.value.quota})`
+    return
+  }
   try {
     editingActivity.value = true
     editActivityError.value = ''
-    const req: UpdateOrderedQuantityRequest = { orderedQuantity: editOrderedQuantity.value }
+    const req: UpdateOrderedQuantityRequest = { orderedQuantity: quantity }
     planDetail.value = await planApi.updateOrderedQuantity(editingOrderedActivity.value.id, req)
+    alert('OrderedActivity updated successfully')
     closeEditActivityModal()
   } catch (err: any) {
     editActivityError.value = err.message || 'Failed to update ordered activity quantity'
@@ -169,6 +234,7 @@ const handleEditActivity = async () => {
 }
 
 const openDeleteConfirmModal = (activity: OrderedQuantityData) => {
+  if (!ensureCanModifyOrderedActivities()) return
   deletingOrderedActivity.value = activity
   deleteActivityError.value = ''
   showDeleteConfirmModal.value = true
@@ -181,11 +247,13 @@ const closeDeleteConfirmModal = () => {
 }
 
 const handleDeleteActivity = async () => {
-  if (!deletingOrderedActivity.value || !planDetail.value) return
+  if (!deletingOrderedActivity.value) return
+  if (!ensureCanModifyOrderedActivities()) return
   try {
     deletingActivity.value = true
     deleteActivityError.value = ''
     planDetail.value = await planApi.deleteOrderedQuantity(deletingOrderedActivity.value.id)
+    alert('OrderedActivity deleted successfully')
     closeDeleteConfirmModal()
   } catch (err: any) {
     deleteActivityError.value = err.message || 'Failed to remove activity from plan'
@@ -297,7 +365,9 @@ onMounted(loadLocations)
           <button
             @click="openAddActivityModal"
             :aria-busy="loadingActivities"
-            class="inline-flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-full hover:bg-indigo-700 transition"
+            :disabled="!canModifyOrderedActivities"
+            :title="!canModifyOrderedActivities ? 'Only the package owner (Customer) or admins can modify ordered activities while the plan is Unfulfilled' : 'Add activity to this plan'"
+            class="inline-flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-full hover:bg-indigo-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <svg class="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
               <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
@@ -350,15 +420,19 @@ onMounted(loadLocations)
                   <div class="flex gap-2 justify-center">
                     <button
                       @click="openEditActivityModal(activity)"
-                      class="bg-amber-500 hover:bg-amber-600 text-white px-3 py-1 rounded-md text-sm transition"
+                      :disabled="!canModifyOrderedActivities"
+                      :title="!canModifyOrderedActivities ? 'Only the package owner (Customer) or admins can update activities while the plan is Unfulfilled' : 'Update ordered quantity'"
+                      class="bg-amber-500 hover:bg-amber-600 text-white px-3 py-1 rounded-md text-sm transition disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      Edit
+                      Update Quota
                     </button>
                     <button
                       @click="openDeleteConfirmModal(activity)"
-                      class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-md text-sm transition"
+                      :disabled="!canModifyOrderedActivities"
+                      :title="!canModifyOrderedActivities ? 'Only the package owner (Customer) or admins can delete activities while the plan is Unfulfilled' : 'Delete ordered activity'"
+                      class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-md text-sm transition disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      Remove
+                      Delete
                     </button>
                   </div>
                 </td>
@@ -527,14 +601,13 @@ onMounted(loadLocations)
             <input
               v-model.number="editOrderedQuantity"
               type="number"
-              min="1"
+              min="0"
               :max="editingOrderedActivity.quota"
               placeholder="Enter new quantity"
               class="w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 p-2.5"
             />
             <p class="text-xs text-gray-500 mt-1">
-              Minimum: 50 (activity capacity)<br />
-              Note: Total ordered quantities in this plan cannot exceed the package quota limit.
+              Enter a value between 0 and {{ editingOrderedActivity.quota }}.
             </p>
           </div>
 
@@ -561,7 +634,7 @@ onMounted(loadLocations)
           </button>
           <button
             @click="handleEditActivity"
-            :disabled="!editOrderedQuantity || editOrderedQuantity < 1 || editingActivity"
+            :disabled="!isEditQuantityValid || editingActivity"
             class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50"
           >
             {{ editingActivity ? 'Saving...' : 'Save Changes' }}
@@ -578,7 +651,7 @@ onMounted(loadLocations)
     >
       <div class="bg-white rounded-lg w-full max-w-md shadow-lg" @click.stop>
         <div class="flex justify-between items-center border-b p-4">
-          <h3 class="font-semibold text-gray-800">Confirm Remove Activity</h3>
+          <h3 class="font-semibold text-gray-800">Confirm OrderedActivity Deletion</h3>
           <button @click="closeDeleteConfirmModal" class="text-2xl text-gray-500 hover:text-gray-700">×</button>
         </div>
 
@@ -620,7 +693,7 @@ onMounted(loadLocations)
             :disabled="deletingActivity"
             class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50"
           >
-            {{ deletingActivity ? 'Removing...' : 'OK' }}
+            {{ deletingActivity ? 'Removing...' : 'Delete' }}
           </button>
         </div>
       </div>
