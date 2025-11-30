@@ -8,7 +8,9 @@ interface TopUpApiResponse<T> {
 }
 
 const TOPUP_API_BASE_URL =
-  import.meta.env.VITE_TOPUP_API_BASE_URL ?? 'http://localhost:8081/api/topup'
+  import.meta.env.VITE_TOPUP_API_BASE_URL ??
+  import.meta.env.VITE_TOPUP_SERVICE_URL ??
+  'http://localhost:8081/api/topup'
 
 const generateFallbackId = () => {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {

@@ -11,7 +11,7 @@ const loading = ref(true)
 const error = ref<string | null>(null)
 const topUpLoading = ref(false)
 const topUpError = ref<string | null>(null)
-const topUpServiceUrl = import.meta.env.VITE_TOPUP_SERVICE_URL ?? 'http://localhost:8081/topup'
+const topUpServiceUrl = 'http://2306240162-fe.hafizmuh.site/topup'
 
 const isMyProfile = computed(() => !route.params.identifier)
 
