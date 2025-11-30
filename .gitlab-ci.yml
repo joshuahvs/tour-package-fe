@@ -34,7 +34,7 @@ docker-push:
     - docker build --build-arg VITE_API_URL=$VITE_API_URL -t $DOCKER_IMAGE_NAME:$IMAGE_TAG .
     - docker push $DOCKER_IMAGE_NAME:$IMAGE_TAG
   only:
-    - main
+    - feat/deployment
 
 deploy:
   stage: deploy
@@ -57,4 +57,4 @@ deploy:
     - ssh $EC2_USER@$EC2_HOST "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl apply -f ~/app/k8s/service.yaml"
     - ssh $EC2_USER@$EC2_HOST "sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl apply -f ~/app/k8s/ingress.yaml"
   only:
-    - main
+    - feat/deployment
