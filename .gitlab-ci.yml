@@ -26,23 +26,6 @@ build:
       - dist/
     expire_in: 1 hour
 
-Berdasarkan log error: ERROR: docker: 'docker buildx build' requires 1 argument
-
-Ini artinya perintah docker build kamu menjadi kacau ("bingung") saat dijalankan. Dia menganggap kamu memasukkan lebih dari satu folder tujuan (padahal seharusnya cuma satu, yaitu tanda titik . di akhir).
-
-Penyebab paling umum adalah:
-
-Masalah Backslash (\): Penggunaan backslash untuk multiline di dalam script YAML GitLab kadang tidak terbaca dengan baik oleh shell (tergantung runner-nya), sehingga spasi atau baris barunya hilang/salah baca.
-
-Spasi di Variabel: Jika salah satu variabel ($VITE_...) ternyata kosong atau mengandung spasi dan tidak diberi tanda kutip, perintahnya akan terpotong dan dianggap sebagai argumen baru.
-
-Solusi: Jadikan Satu Baris & Pakai Tanda Kutip
-Ubah bagian script di stage docker-push kamu menjadi satu baris panjang dan tambahkan tanda kutip pada setiap variabel untuk keamanan.
-
-Ganti bagian docker-push di .gitlab-ci.yml kamu dengan ini:
-
-YAML
-
 docker-push:
   stage: docker-push
   image: docker:latest
