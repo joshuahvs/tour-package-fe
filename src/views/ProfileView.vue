@@ -2,15 +2,42 @@
 import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { profileApi } from '@/services/profile.service'
+import { topUpApi } from '@/services/topup.service'
 import type { UserProfile } from '@/interfaces/profile.interface'
 
 const route = useRoute()
 const profile = ref<UserProfile | null>(null)
 const loading = ref(true)
 const error = ref<string | null>(null)
+const topUpLoading = ref(false)
+const topUpError = ref<string | null>(null)
 const topUpServiceUrl = import.meta.env.VITE_TOPUP_SERVICE_URL ?? 'http://localhost:8081/topup'
 
 const isMyProfile = computed(() => !route.params.identifier)
+
+const normalizeProfile = (data: UserProfile): UserProfile => ({
+  ...data,
+  topUpTransactions: data.topUpTransactions ?? [],
+})
+
+const loadTopUpTransactions = async (customerId: string) => {
+  if (!customerId) return
+
+  topUpLoading.value = true
+  topUpError.value = null
+
+  try {
+    const transactions = await topUpApi.getTransactionsByCustomerId(customerId)
+    if (profile.value && profile.value.id === customerId) {
+      profile.value.topUpTransactions = transactions
+    }
+  } catch (err: any) {
+    topUpError.value = err.message || 'Failed to load top-up transactions'
+    console.error(err)
+  } finally {
+    topUpLoading.value = false
+  }
+}
 
 const fetchProfile = async () => {
   loading.value = true
@@ -19,9 +46,16 @@ const fetchProfile = async () => {
     const identifier = route.params.identifier as string | undefined
     
     if (identifier) {
-      profile.value = await profileApi.getUserProfile(identifier)
+      const data = await profileApi.getUserProfile(identifier)
+      profile.value = normalizeProfile(data)
+      topUpLoading.value = false
+      topUpError.value = null
     } else {
-      profile.value = await profileApi.getMyProfile()
+      const data = await profileApi.getMyProfile()
+      profile.value = normalizeProfile(data)
+      if (profile.value.role === 'CUSTOMER') {
+        await loadTopUpTransactions(profile.value.id)
+      }
     }
   } catch (err: any) {
     error.value = err.message || 'Failed to load user profile'
@@ -204,47 +238,67 @@ onMounted(() => {
       </div>
 
       <!-- Transaction History (Only for My Profile) -->
-      <div v-if="isMyProfile && profile.topUpTransactions.length > 0" class="card transactions-card">
-        <div class="card-header">
-          <h3>
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="12" y1="1" x2="12" y2="23"></line>
-              <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-            </svg>
-            Past Top-Up Transactions
-          </h3>
+      <template v-if="isMyProfile">
+        <div v-if="topUpLoading" class="card transactions-card">
+          <div class="card-body transactions-loading">
+            <div class="spinner small"></div>
+            <p>Loading top-up transactions...</p>
+          </div>
         </div>
-        <div class="card-body">
-          <div class="transactions-list">
-            <div v-for="transaction in profile.topUpTransactions" :key="transaction.id" class="transaction-item">
-              <div class="transaction-info">
-                <div class="transaction-main">
-                  <span class="transaction-amount">{{ formatCurrency(transaction.amount) }}</span>
-                  <span :class="['transaction-status', getStatusClass(transaction.status)]">
-                    {{ transaction.status }}
-                  </span>
-                </div>
-                <div class="transaction-meta">
-                  <span class="transaction-date">{{ formatDateTime(transaction.transactionDate) }}</span>
-                  <span v-if="transaction.description" class="transaction-desc">{{ transaction.description }}</span>
+
+        <div v-else-if="topUpError" class="card empty-transactions">
+          <div class="empty-state-small">
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="8" x2="12" y2="12"></line>
+              <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+            <h4>Unable to load transactions</h4>
+            <p>{{ topUpError }}</p>
+          </div>
+        </div>
+
+        <div v-else-if="profile.topUpTransactions.length > 0" class="card transactions-card">
+          <div class="card-header">
+            <h3>
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="1" x2="12" y2="23"></line>
+                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+              </svg>
+              Past Top-Up Transactions
+            </h3>
+          </div>
+          <div class="card-body">
+            <div class="transactions-list">
+              <div v-for="transaction in profile.topUpTransactions" :key="transaction.id" class="transaction-item">
+                <div class="transaction-info">
+                  <div class="transaction-main">
+                    <span class="transaction-amount">{{ formatCurrency(transaction.amount) }}</span>
+                    <span :class="['transaction-status', getStatusClass(transaction.status)]">
+                      {{ transaction.status }}
+                    </span>
+                  </div>
+                  <div class="transaction-meta">
+                    <span class="transaction-date">{{ formatDateTime(transaction.transactionDate) }}</span>
+                    <span v-if="transaction.description" class="transaction-desc">{{ transaction.description }}</span>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <!-- No Transactions -->
-      <div v-else-if="isMyProfile && profile.topUpTransactions.length === 0" class="card empty-transactions">
-        <div class="empty-state-small">
-          <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="12" y1="1" x2="12" y2="23"></line>
-            <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-          </svg>
-          <h4>No transactions yet</h4>
-          <p>You haven't made any top-up transactions.</p>
+        <div v-else class="card empty-transactions">
+          <div class="empty-state-small">
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="1" x2="12" y2="23"></line>
+              <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+            </svg>
+            <h4>No transactions yet</h4>
+            <p>You haven't made any top-up transactions.</p>
+          </div>
         </div>
-      </div>
+      </template>
     </div>
   </div>
 </template>
@@ -314,6 +368,11 @@ onMounted(() => {
   animation: spin 1s linear infinite;
   margin: 0 auto 1rem;
 }
+.spinner.small {
+  width: 32px;
+  height: 32px;
+  margin-bottom: 0;
+}
 
 @keyframes spin {
   0% { transform: rotate(0deg); }
@@ -374,6 +433,14 @@ onMounted(() => {
   border-radius: 8px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   overflow: hidden;
+}
+.transactions-loading {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  justify-content: center;
+  min-height: 120px;
+  text-align: center;
 }
 
 .card-header {
