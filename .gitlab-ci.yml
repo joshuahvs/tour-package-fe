@@ -12,6 +12,14 @@ build:
   image: node:20
   script:
     - npm ci
+    # --- Penambahan Variabel Environment (Sesuai Screenshot) ---
+    - |
+      cat <<EOF > .env
+      VITE_API_BASE_URL=$VITE_API_BASE_URL
+      VITE_API_URL=$VITE_API_URL
+      VITE_TOPUP_SERVICE_URL=$VITE_TOPUP_SERVICE_URL
+      EOF
+    # -----------------------------------------------------------
     - npm run build
   artifacts:
     paths:
@@ -26,7 +34,13 @@ docker-push:
   before_script:
     - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
   script:
-    - docker build --build-arg VITE_API_URL=$VITE_API_URL -t $DOCKER_IMAGE_NAME:$IMAGE_TAG .
+    # --- Penambahan Build Args (Sesuai Screenshot) ---
+    - docker build \
+      --build-arg VITE_API_BASE_URL=$VITE_API_BASE_URL \
+      --build-arg VITE_API_URL=$VITE_API_URL \
+      --build-arg VITE_TOPUP_SERVICE_URL=$VITE_TOPUP_SERVICE_URL \
+      -t $DOCKER_IMAGE_NAME:$IMAGE_TAG .
+    # -------------------------------------------------
     - docker push $DOCKER_IMAGE_NAME:$IMAGE_TAG
   only:
     - main
