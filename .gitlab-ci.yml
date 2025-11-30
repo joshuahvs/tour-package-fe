@@ -12,6 +12,11 @@ build:
   image: node:20
   script:
     - npm ci
+    - |
+      cat <<'EOF' > .env.production
+      VITE_API_BASE_URL=${VITE_API_BASE_URL}
+      VITE_TOPUP_SERVICE_URL=${VITE_TOPUP_SERVICE_URL}
+      EOF
     - npm run build
   artifacts:
     paths:
